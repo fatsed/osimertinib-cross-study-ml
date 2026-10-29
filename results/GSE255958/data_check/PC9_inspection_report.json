@@ -1,0 +1,22 @@
+{
+  "dataset": "GSE255958",
+  "source_url": "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE255nnn/GSE255958/suppl/GSE255958_RAW.tar",
+  "archive_sha256": "c6d27dc5afcfd8b55aba3ed8bc632c6d4a82521da0bb5229aed0fd859b3d82da",
+  "total_samples_in_geo_series": 82,
+  "selected_pc9_samples": 12,
+  "group_counts": {
+    "Control": 3,
+    "Acute": 3,
+    "DTP": 3,
+    "Acquired_resistant": 3
+  },
+  "common_gene_ids": 26334,
+  "data_type": "submitter-provided RSEM TPM (not raw counts)",
+  "processed_matrix": "data/processed/GSE255958_PC9_TPM.csv",
+  "limitations": [
+    "Only PC9 samples from one GEO study are included.",
+    "PC9-R is a separately derived resistant population; treatment histories differ.",
+    "Three replicates per response state; this is not independent cross-study validation.",
+    "Gene IDs and TPM scale must be harmonized before combining with GSE193258 log2TPM."
+  ]
+}

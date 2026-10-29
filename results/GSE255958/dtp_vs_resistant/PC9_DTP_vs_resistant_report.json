@@ -1,0 +1,24 @@
+{
+  "dataset": "GSE255958",
+  "source": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE255958",
+  "expression_unit": "RSEM TPM transformed with log2(TPM + 1)",
+  "total_PC9_samples": 12,
+  "genes": 26334,
+  "comparison": "PC9 DTP 9 days vs PC9-R acquired resistant treated 48 hours",
+  "comparison_samples": 6,
+  "validation": "leave-one-sample-out; all preprocessing and gene selection within each training fold",
+  "model": "10 selected genes + scaled regularized logistic regression (pilot only)",
+  "accuracy": 0.6666666666666666,
+  "balanced_accuracy": 0.6666666666666666,
+  "roc_auc_out_of_fold": 0.7777777777777778,
+  "exact_label_permutations": 20,
+  "exploratory_permutation_p": 0.2,
+  "limitations": [
+    "Only three replicates per treatment state, all from one study.",
+    "PC9 persisters and PC9-R resistant cells have different selection histories.",
+    "A model can learn cell-line derivative or treatment-context differences.",
+    "Leave-one-sample-out is not external validation; results are highly unstable.",
+    "The permutation comparison assumes sample labels are exchangeable, which may not hold.",
+    "This cannot establish cross-study generalization or a validated biomarker."
+  ]
+}

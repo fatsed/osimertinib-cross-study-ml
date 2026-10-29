@@ -1,0 +1,13 @@
+sample_id,cell_line,response_state,treatment,replicate,source_filename
+GSM8083374,PC9,Control,"DMSO, 48 h",1,GSM8083374_PC9_D_1.genes.results.gz
+GSM8083375,PC9,Control,"DMSO, 48 h",2,GSM8083375_PC9_D_2.genes.results.gz
+GSM8083376,PC9,Control,"DMSO, 48 h",3,GSM8083376_PC9_D_3.genes.results.gz
+GSM8083377,PC9,Acute,"Osimertinib, 48 h",1,GSM8083377_PC9_O2_1.genes.results.gz
+GSM8083378,PC9,Acute,"Osimertinib, 48 h",2,GSM8083378_PC9_O2_2.genes.results.gz
+GSM8083379,PC9,Acute,"Osimertinib, 48 h",3,GSM8083379_PC9_O2_3.genes.results.gz
+GSM8083380,PC9,DTP,"Osimertinib, 9 days",1,GSM8083380_PC9_O9_1.genes.results.gz
+GSM8083381,PC9,DTP,"Osimertinib, 9 days",2,GSM8083381_PC9_O9_2.genes.results.gz
+GSM8083382,PC9,DTP,"Osimertinib, 9 days",3,GSM8083382_PC9_O9_3.genes.results.gz
+GSM8083383,PC9-R,Acquired_resistant,"Osimertinib, 48 h",1,GSM8083383_PC9_d47_1.genes.results.gz
+GSM8083384,PC9-R,Acquired_resistant,"Osimertinib, 48 h",2,GSM8083384_PC9_d47_2.genes.results.gz
+GSM8083385,PC9-R,Acquired_resistant,"Osimertinib, 48 h",3,GSM8083385_PC9_d47_3.genes.results.gz

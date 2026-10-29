@@ -1,170 +1,199 @@
-"""Sample audit and a small DTP-versus-control baseline for GSE193258.
+"""Compare osimertinib DTP samples with acute-treatment samples in GSE193258.
 
-This is a within-study experiment, with one cell line held out at a time.
-It does not classify acquired resistance or establish cross-study generalization.
+Leave one cell line out for testing. All preprocessing and gene selection
+are fitted on training samples. This is a within-study analysis.
 """
 
+import argparse
 import csv
 import gzip
+import json
 import re
-from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
-from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score,
-                             balanced_accuracy_score, roc_auc_score)
+from sklearn.metrics import (ConfusionMatrixDisplay, balanced_accuracy_score,
+                             roc_auc_score)
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_FILE = ROOT / "data/raw/GSE193258_RNAseq_log2TPM_abundance.tsv.gz"
-RESULTS = ROOT / "results" / "GSE193258" / "dtp_vs_control"
-FIGURES = ROOT / "figures" / "GSE193258" / "dtp_vs_control"
-DATA_CHECK = ROOT / "results" / "GSE193258" / "data_check"
+EXPRESSION_FILE = ROOT / "data" / "raw" / "GSE193258_RNAseq_log2TPM_abundance.tsv.gz"
+RESULTS_DIR = ROOT / "results" / "GSE193258" / "dtp_vs_acute"
+FIGURES_DIR = ROOT / "figures" / "GSE193258" / "dtp_vs_acute"
 CELL_LINES = ("H1975", "HCC2935", "HCC827", "PC9")
 
 
-def sample_info(name):
-    """Use the sample naming scheme from the official GSE193258 record."""
-    match = re.fullmatch(r"(H1975|HCC2935|HCC827|PC9)_(.+)_([123])", name)
-    if match is None:
-        raise ValueError(f"Unrecognized sample column: {name}")
-    cell_line, treatment, replicate = match.groups()
-    if treatment == "DMSO":
-        state = "control"
-    elif treatment == "osi_DTP":
-        state = "DTP"
-    elif treatment == "osi_acute":
-        state = "acute"
-    elif treatment.startswith("short_wash"):
-        state = "short_washout"
-    elif treatment.startswith("long_wash"):
-        state = "long_washout"
-    else:
-        raise ValueError(f"Treatment needs manual verification: {name}")
+def sample_metadata(name):
+    match = re.fullmatch(r"(H1975|HCC2935|HCC827|PC9)_osi_(DTP|acute)_([123])", name)
+    if not match:
+        return None
+    cell_line, condition, replicate = match.groups()
     return {"sample": name, "cell_line": cell_line,
-            "condition": state, "replicate": int(replicate)}
+            "condition": condition, "replicate": int(replicate)}
 
 
-def write_csv(path, columns, records):
+def load_data():
+    if not EXPRESSION_FILE.is_file():
+        raise FileNotFoundError(f"Missing {EXPRESSION_FILE}. Run script 01 first.")
+
+    with gzip.open(EXPRESSION_FILE, "rt", encoding="utf-8-sig", newline="") as file:
+        rows = csv.reader(file, delimiter="\t")
+        header = next(rows)
+        if header[0] != "gene":
+            raise ValueError("Unexpected expression-matrix format")
+
+        selected = [(i, sample_metadata(name)) for i, name in enumerate(header[1:])]
+        selected = [(i, item) for i, item in selected if item is not None]
+        samples = [item for _, item in selected]
+        indices = [i + 1 for i, _ in selected]
+        if len(samples) != 24 or len({s["sample"] for s in samples}) != 24:
+            raise ValueError("Expected 24 distinct acute/DTP samples")
+
+        for cell_line in CELL_LINES:
+            for condition in ("acute", "DTP"):
+                if sum(s["cell_line"] == cell_line and s["condition"] == condition
+                       for s in samples) != 3:
+                    raise ValueError(f"Check samples: {cell_line} {condition}")
+
+        values = []
+        genes = []
+        for row in rows:
+            if not row:
+                continue
+            if len(row) != len(header):
+                raise ValueError(f"Wrong column count for {row[0]}")
+            genes.append(row[0])
+            values.append([float(row[i]) for i in indices])
+
+    X = np.asarray(values, dtype=float).T
+    if not np.isfinite(X).all():
+        raise ValueError("Missing or non-finite expression values")
+    y = np.asarray([int(s["condition"] == "DTP") for s in samples])
+    groups = np.asarray([s["cell_line"] for s in samples])
+    return X, y, groups, samples, genes
+
+
+def build_model():
+    return make_pipeline(
+        VarianceThreshold(threshold=1e-10),
+        SelectKBest(score_func=f_classif, k=50),
+        StandardScaler(),
+        LogisticRegression(max_iter=2000, class_weight="balanced", random_state=42),
+    )
+
+
+def grouped_evaluation(X, y, groups, samples=None):
+    folds = []
+    predictions = []
+    for held_out in CELL_LINES:
+        train = groups != held_out
+        test = groups == held_out
+        model = build_model()
+        model.fit(X[train], y[train])
+        pred = model.predict(X[test])
+        prob = model.predict_proba(X[test])[:, 1]
+        folds.append({
+            "held_out_cell_line": held_out,
+            "train_n": int(train.sum()), "test_n": int(test.sum()),
+            "balanced_accuracy": round(float(balanced_accuracy_score(y[test], pred)), 4),
+            "roc_auc": round(float(roc_auc_score(y[test], prob)), 4),
+        })
+        if samples is not None:
+            test_samples = [s for s, is_test in zip(samples, test) if is_test]
+            for s, real, predicted, probability in zip(test_samples, y[test], pred, prob):
+                predictions.append({
+                    "sample": s["sample"], "cell_line": held_out,
+                    "true_label": int(real), "predicted_label": int(predicted),
+                    "probability_DTP": round(float(probability), 6),
+                })
+    return folds, predictions
+
+
+def shuffled_labels(y, groups, rng):
+    # Keep three acute and three DTP labels per cell line.
+    result = y.copy()
+    for cell_line in CELL_LINES:
+        positions = np.flatnonzero(groups == cell_line)
+        result[positions] = rng.permutation(y[positions])
+    return result
+
+
+def save_csv(path, records):
     with path.open("w", newline="", encoding="utf-8-sig") as file:
-        writer = csv.DictWriter(file, fieldnames=columns)
+        writer = csv.DictWriter(file, fieldnames=list(records[0]))
         writer.writeheader()
         writer.writerows(records)
 
 
 def main():
-    if not DATA_FILE.is_file():
-        raise FileNotFoundError(f"Missing matrix: {DATA_FILE}\nRun 01_inspect_gse193258.py first.")
-    RESULTS.mkdir(parents=True, exist_ok=True)
-    FIGURES.mkdir(parents=True, exist_ok=True)
-    DATA_CHECK.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--permutations", type=int, default=30,
+                        help="Number of within-cell-line label-shuffle checks (default: 30)")
+    args = parser.parse_args()
+    if args.permutations < 1:
+        parser.error("--permutations must be at least 1")
 
-    with gzip.open(DATA_FILE, "rt", encoding="utf-8-sig", newline="") as file:
-        reader = csv.reader(file, delimiter="\t")
-        header = next(reader)
-        if header[0] != "gene":
-            raise ValueError(f"Unexpected first column: {header[0]}")
-        metadata = [sample_info(name) for name in header[1:]]
-        if len(metadata) != 60 or len({item["sample"] for item in metadata}) != 60:
-            raise ValueError("Expected 60 distinct GSE193258 sample columns.")
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    X, y, groups, samples, genes = load_data()
+    folds, predictions = grouped_evaluation(X, y, groups, samples)
+    observed = float(np.mean([f["balanced_accuracy"] for f in folds]))
+    print(f"Samples: {len(samples)}, genes: {len(genes)}")
+    print("Comparison: DTP (21 days) vs acute (24 hours), both osimertinib-treated")
+    for f in folds:
+        print(f"{f['held_out_cell_line']}: balanced accuracy={f['balanced_accuracy']:.3f}, "
+              f"ROC-AUC={f['roc_auc']:.3f}")
+    print(f"Mean balanced accuracy: {observed:.3f}")
 
-        group_counts = Counter((m["cell_line"], m["condition"]) for m in metadata)
-        expected_conditions = ("control", "DTP", "acute", "short_washout", "long_washout")
-        for cell_line in CELL_LINES:
-            for condition in expected_conditions:
-                if group_counts[cell_line, condition] != 3:
-                    raise ValueError(f"Check metadata: {cell_line} / {condition} has "
-                                     f"{group_counts[cell_line, condition]} samples, not 3.")
-        write_csv(DATA_CHECK / "GSE193258_sample_metadata.csv",
-                  ["sample", "cell_line", "condition", "replicate"], metadata)
+    rng = np.random.default_rng(42)
+    null_scores = []
+    for i in range(args.permutations):
+        y_shuffled = shuffled_labels(y, groups, rng)
+        shuffled_folds, _ = grouped_evaluation(X, y_shuffled, groups)
+        null_scores.append(float(np.mean([f["balanced_accuracy"] for f in shuffled_folds])))
+    p_value = (1 + sum(score >= observed for score in null_scores)) / (args.permutations + 1)
+    print(f"Label-shuffle check: {args.permutations} repeats, "
+          f"mean null score={np.mean(null_scores):.3f}, empirical p={p_value:.3f}")
 
-        selected = [i for i, m in enumerate(metadata)
-                    if m["condition"] in ("control", "DTP")]
-        selected_info = [metadata[i] for i in selected]
-        genes = []
-        values = []
-        for row in reader:
-            if not row:
-                continue
-            if len(row) != len(header):
-                raise ValueError(f"Malformed expression row for gene {row[0]}")
-            genes.append(row[0])
-            values.append([float(row[i + 1]) for i in selected])
-
-    X = np.asarray(values, dtype=float).T   # samples x genes
-    y = np.array([int(m["condition"] == "DTP") for m in selected_info])
-    groups = np.array([m["cell_line"] for m in selected_info])
-    if X.shape[0] != 24 or not np.isfinite(X).all():
-        raise ValueError(f"Unexpected matrix shape or invalid entries: {X.shape}")
-
-    print(f"Matrix: {X.shape[0]} selected samples x {X.shape[1]} genes")
-    print("Groups checked: 4 cell lines x 5 conditions x 3 replicates")
-    print("Baseline samples: 12 control, 12 DTP")
-
-    fold_results = []
-    predictions = []
-    for cell_line in CELL_LINES:
-        train = groups != cell_line
-        test = groups == cell_line
-        # All transformations are fitted on the training cell lines only.
-        model = make_pipeline(
-            SimpleImputer(strategy="median"),
-            VarianceThreshold(threshold=1e-10),
-            SelectKBest(score_func=f_classif, k=50),
-            StandardScaler(),
-            LogisticRegression(max_iter=2000, class_weight="balanced", random_state=42),
-        )
-        model.fit(X[train], y[train])
-        pred = model.predict(X[test])
-        prob = model.predict_proba(X[test])[:, 1]
-        score = {
-            "held_out_cell_line": cell_line,
-            "train_n": int(train.sum()),
-            "test_n": int(test.sum()),
-            "accuracy": round(float(accuracy_score(y[test], pred)), 4),
-            "balanced_accuracy": round(float(balanced_accuracy_score(y[test], pred)), 4),
-            "roc_auc": round(float(roc_auc_score(y[test], prob)), 4),
-        }
-        fold_results.append(score)
-        for meta, true, p, probability in zip(
-            [m for m, chosen in zip(selected_info, test) if chosen],
-            y[test], pred, prob,
-        ):
-            predictions.append({"sample": meta["sample"],
-                                "held_out_cell_line": cell_line,
-                                "true_label": int(true), "predicted_label": int(p),
-                                "probability_DTP": round(float(probability), 6)})
-        print(f"{cell_line}: balanced accuracy={score['balanced_accuracy']:.3f}, "
-              f"ROC-AUC={score['roc_auc']:.3f}")
-
-    write_csv(RESULTS / "GSE193258_baseline_folds.csv",
-              list(fold_results[0]), fold_results)
-    write_csv(RESULTS / "GSE193258_baseline_predictions.csv",
-              list(predictions[0]), predictions)
-
-    actual = np.array([p["true_label"] for p in predictions])
-    predicted = np.array([p["predicted_label"] for p in predictions])
+    prefix = "GSE193258_DTP_vs_acute"
+    save_csv(RESULTS_DIR / f"{prefix}_folds.csv", folds)
+    save_csv(RESULTS_DIR / f"{prefix}_predictions.csv", predictions)
+    report = {
+        "dataset": "GSE193258",
+        "comparison": "DTP vs acute osimertinib treatment",
+        "total_samples": len(samples), "genes": len(genes),
+        "train_test_design": "leave-one-cell-line-out, same study",
+        "mean_balanced_accuracy": observed,
+        "number_of_label_permutations": args.permutations,
+        "mean_permuted_balanced_accuracy": float(np.mean(null_scores)),
+        "permutation_p_value": float(p_value),
+        "interpretation_limits": [
+            "This does not assess acquired resistance.",
+            "The groups differ in treatment duration (21 days vs 24 hours).",
+            "All samples originate from one study; this is not cross-study validation.",
+            "With six test samples per fold, performance estimates are imprecise.",
+        ],
+    }
+    (RESULTS_DIR / f"{prefix}_report.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
+    true = [p["true_label"] for p in predictions]
+    predicted = [p["predicted_label"] for p in predictions]
     display = ConfusionMatrixDisplay.from_predictions(
-        actual, predicted, labels=[0, 1], display_labels=["Control", "DTP"],
+        true, predicted, labels=[0, 1], display_labels=["Acute", "DTP"],
         values_format="d", colorbar=False,
     )
-    display.ax_.set_title("Leave-one-cell-line-out baseline (24 samples)")
+    display.ax_.set_title("DTP vs acute: cell-line-held-out predictions")
     display.figure_.tight_layout()
-    display.figure_.savefig(FIGURES / "GSE193258_baseline_confusion_matrix.png", dpi=180)
+    display.figure_.savefig(FIGURES_DIR / f"{prefix}_confusion_matrix.png", dpi=180)
     plt.close(display.figure_)
-
-    print("Mean balanced accuracy:",
-          round(float(np.mean([r["balanced_accuracy"] for r in fold_results])), 3))
-    print("Outputs: results/GSE193258/data_check/GSE193258_sample_metadata.csv,")
-    print("         results/GSE193258/dtp_vs_control/GSE193258_baseline_folds.csv,")
-    print("         results/GSE193258/dtp_vs_control/GSE193258_baseline_predictions.csv,")
-    print("         figures/GSE193258/dtp_vs_control/GSE193258_baseline_confusion_matrix.png")
-    print("Note: within-study cell-line holdout, NOT cross-study evaluation.")
+    print(f"Saved report, folds and predictions to {RESULTS_DIR.relative_to(ROOT)}/{prefix}_*")
+    print(f"Saved confusion matrix to {FIGURES_DIR.relative_to(ROOT)}/{prefix}_confusion_matrix.png")
+    print("NOTE: This experiment does not test DTP versus acquired resistance.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+sample_id,state,true_label_resistant,predicted_label_resistant,probability_resistant
+GSM8083380,DTP,0,1,0.538239
+GSM8083381,DTP,0,0,0.275037
+GSM8083382,DTP,0,0,0.375792
+GSM8083383,Acquired_resistant,1,1,0.732687
+GSM8083384,Acquired_resistant,1,1,0.778896
+GSM8083385,Acquired_resistant,1,0,0.276439

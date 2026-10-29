@@ -1,138 +1,170 @@
-"""Download and audit the public GSE193258 expression matrix (standard library only).
+"""Sample audit and a small DTP-versus-control baseline for GSE193258.
 
-This script does NOT train a model or label acquired-resistant cells.
+This is a within-study experiment, with one cell line held out at a time.
+It does not classify acquired resistance or establish cross-study generalization.
 """
-from __future__ import annotations
 
 import csv
 import gzip
-import hashlib
-import json
-import sys
-import urllib.error
-import urllib.request
+import re
+from collections import Counter
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_classif
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score,
+                             balanced_accuracy_score, roc_auc_score)
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
 ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT / "data" / "raw"
-RESULTS_DIR = ROOT / "results" / "GSE193258" / "data_check"
-FILENAME = "GSE193258_RNAseq_log2TPM_abundance.tsv.gz"
-SOURCE_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE193nnn/GSE193258/suppl/"
-    + FILENAME
-)
-SOURCE_PAGE = "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE193258"
+DATA_FILE = ROOT / "data/raw/GSE193258_RNAseq_log2TPM_abundance.tsv.gz"
+RESULTS = ROOT / "results" / "GSE193258" / "dtp_vs_control"
+FIGURES = ROOT / "figures" / "GSE193258" / "dtp_vs_control"
+DATA_CHECK = ROOT / "results" / "GSE193258" / "data_check"
+CELL_LINES = ("H1975", "HCC2935", "HCC827", "PC9")
 
 
-def download_if_needed(path: Path) -> None:
-    if path.exists() and path.stat().st_size > 0:
-        print(f"Using existing file: {path}")
-        return
-    print(f"Downloading public processed expression file from:\n  {SOURCE_URL}")
-    temp_path = path.with_name(path.name + ".part")
-    request = urllib.request.Request(
-        SOURCE_URL, headers={"User-Agent": "ResearchDataAudit/1.0 (academic)"}
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response, temp_path.open("wb") as out:
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
-                out.write(chunk)
-        temp_path.replace(path)
-    except (OSError, urllib.error.URLError) as exc:
-        temp_path.unlink(missing_ok=True)
-        print("\nDownload failed:", exc)
-        print("Open the official GEO page and download the log2TPM file manually:")
-        print("  " + SOURCE_PAGE)
-        print(f"Save the original file as:\n  {path}")
-        sys.exit(1)
+def sample_info(name):
+    """Use the sample naming scheme from the official GSE193258 record."""
+    match = re.fullmatch(r"(H1975|HCC2935|HCC827|PC9)_(.+)_([123])", name)
+    if match is None:
+        raise ValueError(f"Unrecognized sample column: {name}")
+    cell_line, treatment, replicate = match.groups()
+    if treatment == "DMSO":
+        state = "control"
+    elif treatment == "osi_DTP":
+        state = "DTP"
+    elif treatment == "osi_acute":
+        state = "acute"
+    elif treatment.startswith("short_wash"):
+        state = "short_washout"
+    elif treatment.startswith("long_wash"):
+        state = "long_washout"
+    else:
+        raise ValueError(f"Treatment needs manual verification: {name}")
+    return {"sample": name, "cell_line": cell_line,
+            "condition": state, "replicate": int(replicate)}
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def write_csv(path, columns, records):
+    with path.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.DictWriter(file, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(records)
 
 
-def inspect_matrix(path: Path) -> dict:
-    with gzip.open(path, "rt", encoding="utf-8-sig", errors="replace", newline="") as stream:
-        reader = csv.reader(stream, delimiter="\t")
-        header = next(reader, None)
-        if not header or len(header) < 3:
-            raise ValueError("Unexpected header: expected gene ID and multiple sample columns")
-        # The first column usually contains gene identifiers. Verify it manually before analysis.
-        sample_names = header[1:]
-        first_five_gene_rows = []
-        total_gene_rows = 0
-        first_col_examples = []
+def main():
+    if not DATA_FILE.is_file():
+        raise FileNotFoundError(f"Missing matrix: {DATA_FILE}\nRun 01_inspect_gse193258.py first.")
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    DATA_CHECK.mkdir(parents=True, exist_ok=True)
+
+    with gzip.open(DATA_FILE, "rt", encoding="utf-8-sig", newline="") as file:
+        reader = csv.reader(file, delimiter="\t")
+        header = next(reader)
+        if header[0] != "gene":
+            raise ValueError(f"Unexpected first column: {header[0]}")
+        metadata = [sample_info(name) for name in header[1:]]
+        if len(metadata) != 60 or len({item["sample"] for item in metadata}) != 60:
+            raise ValueError("Expected 60 distinct GSE193258 sample columns.")
+
+        group_counts = Counter((m["cell_line"], m["condition"]) for m in metadata)
+        expected_conditions = ("control", "DTP", "acute", "short_washout", "long_washout")
+        for cell_line in CELL_LINES:
+            for condition in expected_conditions:
+                if group_counts[cell_line, condition] != 3:
+                    raise ValueError(f"Check metadata: {cell_line} / {condition} has "
+                                     f"{group_counts[cell_line, condition]} samples, not 3.")
+        write_csv(DATA_CHECK / "GSE193258_sample_metadata.csv",
+                  ["sample", "cell_line", "condition", "replicate"], metadata)
+
+        selected = [i for i, m in enumerate(metadata)
+                    if m["condition"] in ("control", "DTP")]
+        selected_info = [metadata[i] for i in selected]
+        genes = []
+        values = []
         for row in reader:
-            if not row or len(row) < 2 or row[0].startswith("#"):
+            if not row:
                 continue
-            total_gene_rows += 1
-            if len(first_five_gene_rows) < 5:
-                first_five_gene_rows.append(row)
-                first_col_examples.append(row[0])
-    if len(first_five_gene_rows) < 5:
-        raise ValueError("Not enough gene-expression rows to create a preview")
+            if len(row) != len(header):
+                raise ValueError(f"Malformed expression row for gene {row[0]}")
+            genes.append(row[0])
+            values.append([float(row[i + 1]) for i in selected])
 
-    # Five samples by five features: a format illustration only.
-    preview_path = RESULTS_DIR / "GSE193258_table2_preview.csv"
-    gene_ids = [r[0] for r in first_five_gene_rows]
-    selected_sample_names = sample_names[:5]
-    with preview_path.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.writer(stream)
-        writer.writerow(["sample_column"] + gene_ids)
-        for sample_idx, name in enumerate(selected_sample_names):
-            values = []
-            for gene_row in first_five_gene_rows:
-                values.append(gene_row[sample_idx + 1] if len(gene_row) > sample_idx + 1 else "")
-            writer.writerow([name] + values)
+    X = np.asarray(values, dtype=float).T   # samples x genes
+    y = np.array([int(m["condition"] == "DTP") for m in selected_info])
+    groups = np.array([m["cell_line"] for m in selected_info])
+    if X.shape[0] != 24 or not np.isfinite(X).all():
+        raise ValueError(f"Unexpected matrix shape or invalid entries: {X.shape}")
 
-    return {
-        "geo_accession": "GSE193258",
-        "source_page": SOURCE_PAGE,
-        "source_file": SOURCE_URL,
-        "local_file": str(path.relative_to(ROOT)),
-        "sha256": sha256(path),
-        "expression_type": "submitter-provided log2TPM abundance; not raw counts",
-        "number_of_expression_rows": total_gene_rows,
-        "number_of_matrix_columns_excluding_first_id_column": len(sample_names),
-        "first_column_header": header[0],
-        "first_five_first_column_values": first_col_examples,
-        "first_five_sample_column_headers": selected_sample_names,
-        "preview_file": str(preview_path.relative_to(ROOT)),
-        "limitations": [
-            "Sample columns and row identifiers must be validated against GEO metadata.",
-            "This matrix alone is not evidence of acquired-resistant labels.",
-            "The preview is not a classification result.",
-            "Different studies may use incompatible gene IDs and expression units.",
-        ],
-    }
+    print(f"Matrix: {X.shape[0]} selected samples x {X.shape[1]} genes")
+    print("Groups checked: 4 cell lines x 5 conditions x 3 replicates")
+    print("Baseline samples: 12 control, 12 DTP")
 
+    fold_results = []
+    predictions = []
+    for cell_line in CELL_LINES:
+        train = groups != cell_line
+        test = groups == cell_line
+        # All transformations are fitted on the training cell lines only.
+        model = make_pipeline(
+            SimpleImputer(strategy="median"),
+            VarianceThreshold(threshold=1e-10),
+            SelectKBest(score_func=f_classif, k=50),
+            StandardScaler(),
+            LogisticRegression(max_iter=2000, class_weight="balanced", random_state=42),
+        )
+        model.fit(X[train], y[train])
+        pred = model.predict(X[test])
+        prob = model.predict_proba(X[test])[:, 1]
+        score = {
+            "held_out_cell_line": cell_line,
+            "train_n": int(train.sum()),
+            "test_n": int(test.sum()),
+            "accuracy": round(float(accuracy_score(y[test], pred)), 4),
+            "balanced_accuracy": round(float(balanced_accuracy_score(y[test], pred)), 4),
+            "roc_auc": round(float(roc_auc_score(y[test], prob)), 4),
+        }
+        fold_results.append(score)
+        for meta, true, p, probability in zip(
+            [m for m, chosen in zip(selected_info, test) if chosen],
+            y[test], pred, prob,
+        ):
+            predictions.append({"sample": meta["sample"],
+                                "held_out_cell_line": cell_line,
+                                "true_label": int(true), "predicted_label": int(p),
+                                "probability_DTP": round(float(probability), 6)})
+        print(f"{cell_line}: balanced accuracy={score['balanced_accuracy']:.3f}, "
+              f"ROC-AUC={score['roc_auc']:.3f}")
 
-def main() -> None:
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = RAW_DIR / FILENAME
-    download_if_needed(path)
-    try:
-        report = inspect_matrix(path)
-    except (OSError, UnicodeError, ValueError, EOFError) as exc:
-        print("Unable to inspect downloaded file:", exc)
-        print("Verify the file format against the official GEO record:", SOURCE_PAGE)
-        sys.exit(1)
-    report_path = RESULTS_DIR / "GSE193258_dataset_report.json"
-    report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    print("\nSUCCESS: inspection completed (not model training)")
-    print("Gene-expression rows:", report["number_of_expression_rows"])
-    print("Columns after gene-ID column:", report["number_of_matrix_columns_excluding_first_id_column"])
-    print("Example sample columns:", report["first_five_sample_column_headers"])
-    print("Preview:", report["preview_file"])
-    print("Report:", report_path.relative_to(ROOT))
+    write_csv(RESULTS / "GSE193258_baseline_folds.csv",
+              list(fold_results[0]), fold_results)
+    write_csv(RESULTS / "GSE193258_baseline_predictions.csv",
+              list(predictions[0]), predictions)
+
+    actual = np.array([p["true_label"] for p in predictions])
+    predicted = np.array([p["predicted_label"] for p in predictions])
+    display = ConfusionMatrixDisplay.from_predictions(
+        actual, predicted, labels=[0, 1], display_labels=["Control", "DTP"],
+        values_format="d", colorbar=False,
+    )
+    display.ax_.set_title("Leave-one-cell-line-out baseline (24 samples)")
+    display.figure_.tight_layout()
+    display.figure_.savefig(FIGURES / "GSE193258_baseline_confusion_matrix.png", dpi=180)
+    plt.close(display.figure_)
+
+    print("Mean balanced accuracy:",
+          round(float(np.mean([r["balanced_accuracy"] for r in fold_results])), 3))
+    print("Outputs: results/GSE193258/data_check/GSE193258_sample_metadata.csv,")
+    print("         results/GSE193258/dtp_vs_control/GSE193258_baseline_folds.csv,")
+    print("         results/GSE193258/dtp_vs_control/GSE193258_baseline_predictions.csv,")
+    print("         figures/GSE193258/dtp_vs_control/GSE193258_baseline_confusion_matrix.png")
+    print("Note: within-study cell-line holdout, NOT cross-study evaluation.")
 
 
 if __name__ == "__main__":
