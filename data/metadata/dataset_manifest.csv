@@ -1,8 +1,0 @@
-dataset,role_in_project,downloaded_file,purpose
-GSE193258,Core DTP + washout,estimated_counts + log2TPM,Control to Acute to DTP to Washout
-GSE255958,Generic persistence,GSE255958_RAW.tar,Identify DTP programs shared across models and treatments
-GSE254485,Resistance progression,featureCounts,Track transcriptomic changes during progression toward resistance
-GSE202859,Resistance validation,TPMs_allsamples,Validate final signature in independent resistant models
-GSE262582,Resistance validation,processed_data,Validate in HCC827 parental versus resistant
-GSE272162,Resistance validation,summary_FPKM,Validate in H1975 parental versus resistant
-GSE289619,Clinical validation,CountMatrix,Test association of final signature with patient treatment response
