@@ -1,0 +1,32 @@
+{
+  "geo_accession": "GSE193258",
+  "source_page": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE193258",
+  "source_file": "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE193nnn/GSE193258/suppl/GSE193258_RNAseq_log2TPM_abundance.tsv.gz",
+  "local_file": "data\\raw\\GSE193258_RNAseq_log2TPM_abundance.tsv.gz",
+  "sha256": "c4bd1b3d7e158783347a7b678df70bec2c590728a59486d67fcb3a8e21750949",
+  "expression_type": "submitter-provided log2TPM abundance; not raw counts",
+  "number_of_expression_rows": 19712,
+  "number_of_matrix_columns_excluding_first_id_column": 60,
+  "first_column_header": "gene",
+  "first_five_first_column_values": [
+    "A1BG",
+    "A1CF",
+    "A2M",
+    "A2ML1",
+    "A3GALT2"
+  ],
+  "first_five_sample_column_headers": [
+    "HCC2935_DMSO_1",
+    "HCC2935_DMSO_2",
+    "HCC2935_DMSO_3",
+    "HCC2935_long_wash_1",
+    "HCC2935_long_wash_2"
+  ],
+  "preview_file": "results\\GSE193258_table2_preview.csv",
+  "limitations": [
+    "Sample columns and row identifiers must be validated against GEO metadata.",
+    "This matrix alone is not evidence of acquired-resistant labels.",
+    "The preview is not a classification result.",
+    "Different studies may use incompatible gene IDs and expression units."
+  ]
+}

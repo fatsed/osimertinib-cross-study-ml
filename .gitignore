@@ -245,3 +245,5 @@ References/
 
 # Private manuscript drafts
 docs/*.docx
+data/raw/
+.venv/
