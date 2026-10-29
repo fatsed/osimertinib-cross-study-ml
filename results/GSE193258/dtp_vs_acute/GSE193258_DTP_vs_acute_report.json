@@ -1,0 +1,17 @@
+{
+  "dataset": "GSE193258",
+  "comparison": "DTP vs acute osimertinib treatment",
+  "total_samples": 24,
+  "genes": 19712,
+  "train_test_design": "leave-one-cell-line-out, same study",
+  "mean_balanced_accuracy": 0.874975,
+  "number_of_label_permutations": 30,
+  "mean_permuted_balanced_accuracy": 0.5194458333333334,
+  "permutation_p_value": 0.03225806451612903,
+  "interpretation_limits": [
+    "This does not assess acquired resistance.",
+    "The groups differ in treatment duration (21 days vs 24 hours).",
+    "All samples originate from one study; this is not cross-study validation.",
+    "With six test samples per fold, performance estimates are imprecise."
+  ]
+}

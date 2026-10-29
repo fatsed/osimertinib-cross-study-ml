@@ -1,0 +1,5 @@
+﻿held_out_cell_line,train_n,test_n,balanced_accuracy,roc_auc
+H1975,18,6,0.8333,1.0
+HCC2935,18,6,1.0,1.0
+HCC827,18,6,0.8333,1.0
+PC9,18,6,0.8333,1.0
