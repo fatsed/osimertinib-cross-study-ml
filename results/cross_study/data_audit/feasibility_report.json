@@ -1,0 +1,24 @@
+{
+  "metadata_records_total": 96,
+  "metadata_records_by_study": {
+    "GSE193258": 60,
+    "GSE255958": 12,
+    "GSE285632": 24
+  },
+  "DTP_or_resistant_candidates_by_study": {
+    "GSE193258": 12,
+    "GSE255958": 6,
+    "GSE285632": 6
+  },
+  "important_notes": [
+    "GSE193258 has DTP samples but no confirmed acquired-resistant group; washout is not resistance.",
+    "Only 12 PC9-related samples were selected from the 82 samples in GSE255958.",
+    "GSE255958 DTP uses PC9; its resistant samples use the PC9-R derivative.",
+    "GSE285632 contributes only GEO sample metadata for now; expression has not been audited.",
+    "For GSE285632, EV-only DTP/resistant is the proposed first comparison; OC is an intervention group.",
+    "GSE255958 vs GSE285632 changes cell line, study protocol and possibly measurement scale together.",
+    "These records are not 96 independent samples for one valid classifier.",
+    "No cross-study classification performance is established by this audit."
+  ],
+  "decision": "Do not claim cross-study generalization until expression availability, gene IDs, labels and confounding are checked."
+}

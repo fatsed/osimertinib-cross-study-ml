@@ -1,0 +1,19 @@
+excel_sample,provisional_state,condition_marker,geo_sample_id,mapping_verified
+P-1,Parental,without +C,,NO
+P-2,Parental,without +C,,NO
+P-3,Parental,without +C,,NO
+P+C-1,Parental,+C,,NO
+P+C-2,Parental,+C,,NO
+P+C-3,Parental,+C,,NO
+D-1,DTP,without +C,,NO
+D-2,DTP,without +C,,NO
+D-3,DTP,without +C,,NO
+D+C-1,DTP,+C,,NO
+D+C-2,DTP,+C,,NO
+D+C-3,DTP,+C,,NO
+R-1,Resistant,without +C,,NO
+R-2,Resistant,without +C,,NO
+R-3,Resistant,without +C,,NO
+R+C-1,Resistant,+C,,NO
+R+C-2,Resistant,+C,,NO
+R+C-3,Resistant,+C,,NO

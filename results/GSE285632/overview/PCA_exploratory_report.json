@@ -1,0 +1,18 @@
+{
+  "dataset": "GSE285632",
+  "analysis": "exploratory PCA, no predictive modeling",
+  "samples": 18,
+  "total_gene_rows": 22549,
+  "rows_excluded_due_to_repeated_gene_names": 60,
+  "genes_used_for_PCA": 500,
+  "pca_variance_explained_PC1": 0.9326194355415302,
+  "pca_variance_explained_PC2": 0.029107410041386214,
+  "preprocessing": "Top 500 variable nonduplicated gene symbols; gene-wise standardization; PCA",
+  "limitations": [
+    "Workbook column names are not yet confirmed against individual GEO GSM identifiers.",
+    "The meaning of +C and the expression units are not yet verified.",
+    "The plot uses all samples and cannot estimate prediction performance.",
+    "All 18 samples belong to the same study; no cross-study validation was performed.",
+    "The PCA is descriptive and gene selection here is not an ML feature-selection result."
+  ]
+}

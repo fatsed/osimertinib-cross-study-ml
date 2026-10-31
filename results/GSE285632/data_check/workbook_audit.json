@@ -1,0 +1,136 @@
+{
+  "dataset": "GSE285632",
+  "input_filename": "GSE285632_differentially-expressed.xlsx",
+  "source": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE285632",
+  "source_sha256": "e493f49a7f831d26ccf8304784f50ed416df66a3619e34cad8f967dabced55cb",
+  "sheet_name": "Sheet1",
+  "expression_rows": 22549,
+  "distinct_gene_symbols": 22504,
+  "repeated_gene_symbol_names": 15,
+  "extra_rows_due_to_repeated_symbols": 45,
+  "sample_columns": 18,
+  "sample_names": [
+    "P-1",
+    "P-2",
+    "P-3",
+    "P+C-1",
+    "P+C-2",
+    "P+C-3",
+    "D-1",
+    "D-2",
+    "D-3",
+    "D+C-1",
+    "D+C-2",
+    "D+C-3",
+    "R-1",
+    "R-2",
+    "R-3",
+    "R+C-1",
+    "R+C-2",
+    "R+C-3"
+  ],
+  "finite_nonnegative_numeric_entries": 405882,
+  "entries_not_compatible_with_log10_integer_plus_one": 0,
+  "zero_fraction_by_sample": {
+    "P-1": 0.23438,
+    "P-2": 0.22538,
+    "P-3": 0.22941,
+    "P+C-1": 0.23265,
+    "P+C-2": 0.22786,
+    "P+C-3": 0.23141,
+    "D-1": 0.22178,
+    "D-2": 0.23323,
+    "D-3": 0.23997,
+    "D+C-1": 0.22267,
+    "D+C-2": 0.21726,
+    "D+C-3": 0.22054,
+    "R-1": 0.25669,
+    "R-2": 0.26879,
+    "R-3": 0.27403,
+    "R+C-1": 0.26746,
+    "R+C-2": 0.27092,
+    "R+C-3": 0.25216
+  },
+  "numeric_range_by_sample": {
+    "P-1": [
+      0.0,
+      5.76177227603399
+    ],
+    "P-2": [
+      0.0,
+      5.84674955784285
+    ],
+    "P-3": [
+      0.0,
+      5.81251161552679
+    ],
+    "P+C-1": [
+      0.0,
+      5.81624793039127
+    ],
+    "P+C-2": [
+      0.0,
+      5.83420445640637
+    ],
+    "P+C-3": [
+      0.0,
+      5.83805908963411
+    ],
+    "D-1": [
+      0.0,
+      5.79553731067546
+    ],
+    "D-2": [
+      0.0,
+      5.76852266863549
+    ],
+    "D-3": [
+      0.0,
+      5.84557426190899
+    ],
+    "D+C-1": [
+      0.0,
+      5.82272301986962
+    ],
+    "D+C-2": [
+      0.0,
+      5.83968917252582
+    ],
+    "D+C-3": [
+      0.0,
+      5.83576474392369
+    ],
+    "R-1": [
+      0.0,
+      5.72285430395907
+    ],
+    "R-2": [
+      0.0,
+      5.60725981491592
+    ],
+    "R-3": [
+      0.0,
+      5.62549045463254
+    ],
+    "R+C-1": [
+      0.0,
+      5.65084932445132
+    ],
+    "R+C-2": [
+      0.0,
+      5.59656301041819
+    ],
+    "R+C-3": [
+      0.0,
+      5.71065545519598
+    ]
+  },
+  "cautions": [
+    "P, D and R are provisional interpretations; verify the exact mapping to GEO GSM samples.",
+    "The +C condition is NOT assigned to EV/OC until provenance is confirmed.",
+    "The values are mathematically compatible with log10(integer+1); original measurement units are unverified.",
+    "Duplicate gene symbols may represent different underlying features; do not automatically average or discard them.",
+    "All 18 samples belong to ONE GEO study; they are NOT an independent cross-study test.",
+    "This script does not perform classification or differential expression analysis."
+  ]
+}
